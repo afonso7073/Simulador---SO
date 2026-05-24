@@ -1,23 +1,16 @@
 #include "sim.h"
 
-/* algoritmo de escalonamento ativo — muda conforme quiseres */
-#define ALGORITMO 0   /* 0=FCFS  1=Priority  2=SJFS */
-#define QUANTUM   3   /* unidades de tempo por fatia */
+#define ALGORITMO 0
+#define QUANTUM   3
 
-/* ─── FUNÇÕES AUXILIARES ──────────────────────────────── */
-
-/* Inicializa toda a pcbTabela a FREE */
 static void inicializarTabela(void)
 {
     for (int i = 0; i < MAX_PROCS; i++)
         pcbTabela[i].estado = FREE;
 }
 
-/* Cria um processo novo a partir dum ficheiro .prg.
-   Devolve o índice na pcbTabela, ou -1 em erro. */
 static int criarProcesso(const char *ficheiro, int ppid, int prioridade)
 {
-    /* procura slot livre */
     int idx = -1;
     for (int i = 0; i < MAX_PROCS; i++)
     {
@@ -33,19 +26,16 @@ static int criarProcesso(const char *ficheiro, int ppid, int prioridade)
         return -1;
     }
 
-    /* carrega o programa em memória */
     int start = programaEmMemoria(ficheiro);
     if (start == -1)
         start = carregarPrograma(ficheiro);
     if (start == -1)
         return -1;
 
-    /* conta instruções */
     int size = 0;
     for (int i = start; i < MEM_SIZE && memory[i].ins != 0; i++)
         size++;
 
-    /* preenche o PCB */
     PCB *p = &pcbTabela[idx];
     p->pid          = nextPid++;
     p->ppid         = ppid;
@@ -67,7 +57,6 @@ static int criarProcesso(const char *ficheiro, int ppid, int prioridade)
     return idx;
 }
 
-/* Chama o escalonador ativo e devolve o índice escolhido */
 static int escalonar(void)
 {
     switch (ALGORITMO)
@@ -78,9 +67,18 @@ static int escalonar(void)
     }
 }
 
-/* ─── ESCALONADOR DE LONGO PRAZO ──────────────────────── */
-/* Percorre a fila de bloqueados e desbloqueia aleatoriamente
-   um ou mais processos, movendo-os para prontos.            */
+static void verificarChegadas(void)
+{
+    for (int i = 0; i < numPendentes; i++)
+    {
+        if (pendentes[i].chegada <= tempo && pendentes[i].ficheiro[0] != '\0')
+        {
+            criarProcesso(pendentes[i].ficheiro, 0, pendentes[i].prioridade);
+            pendentes[i].ficheiro[0] = '\0';
+        }
+    }
+}
+
 void escalonadorLongoPrazo(void)
 {
     if (filaVazia(&bloqueados))
@@ -93,7 +91,6 @@ void escalonadorLongoPrazo(void)
 
     for (int i = 0; i < n; i++)
     {
-        /* 50% de probabilidade de desbloquear cada processo */
         if (rand() % 2 == 0)
         {
             pcbTabela[tmp[i]].estado = READY;
@@ -108,9 +105,6 @@ void escalonadorLongoPrazo(void)
     }
 }
 
-/* ─── INICIALIZAÇÃO ───────────────────────────────────── */
-/* Lê o plan.txt e cria os processos iniciais.
-   Formato de cada linha: ficheiro.prg tempo_chegada [prioridade] */
 void iniciarSimulador(const char *planFile)
 {
     inicializarTabela();
@@ -118,6 +112,7 @@ void iniciarSimulador(const char *planFile)
     filaInit(&bloqueados);
     memset(memory, 0, sizeof(memory));
     srand(42);
+    numPendentes = 0;
 
     FILE *f = fopen(planFile, "r");
     if (f == NULL)
@@ -127,28 +122,35 @@ void iniciarSimulador(const char *planFile)
     }
 
     char ficheiro[NOME_MAX];
-    int  chegada   = 0;
+    int  chegada    = 0;
     int  prioridade = 1;
     char linha[64];
 
     while (fgets(linha, sizeof(linha), f))
     {
-        /* ignora linhas vazias */
         if (linha[0] == '\n' || linha[0] == '\0')
             continue;
 
-        prioridade = 1; /* valor por defeito */
-
+        prioridade = 1;
         int lidos = sscanf(linha, "%14s %d %d", ficheiro, &chegada, &prioridade);
         if (lidos < 2)
             continue;
 
-        criarProcesso(ficheiro, 0, prioridade);
+        if (chegada == 0)
+        {
+            criarProcesso(ficheiro, 0, prioridade);
+        }
+        else
+        {
+            strncpy(pendentes[numPendentes].ficheiro, ficheiro, NOME_MAX - 1);
+            pendentes[numPendentes].chegada    = chegada;
+            pendentes[numPendentes].prioridade = prioridade;
+            numPendentes++;
+        }
     }
     fclose(f);
 }
-/* ─── LOOP PRINCIPAL ──────────────────────────────────── */
-/* Lê comandos do control.txt (ou stdin) e executa-os.     */
+
 void correrSimulador(const char *controlFile)
 {
     FILE *f;
@@ -170,7 +172,7 @@ void correrSimulador(const char *controlFile)
         {
             case 'E':
             {
-                /* executa um processo durante QUANTUM unidades */
+                verificarChegadas();
                 int idx = escalonar();
                 if (idx == -1)
                 {
@@ -183,7 +185,6 @@ void correrSimulador(const char *controlFile)
 
             case 'I':
             {
-                /* interrompe o processo em execução e bloqueia-o */
                 if (runningIdx == -1)
                 {
                     printf("[t=%d] Nenhum processo em execução\n", tempo);
@@ -199,17 +200,14 @@ void correrSimulador(const char *controlFile)
             }
 
             case 'D':
-                /* escalonador de longo prazo — desbloqueia processos */
                 escalonadorLongoPrazo();
                 break;
 
             case 'R':
-                /* relatório do estado atual */
                 report();
                 break;
 
             case 'T':
-                /* terminação do simulador */
                 printf("\n=== SIMULADOR TERMINADO ===\n");
                 reportFinal();
                 if (f != stdin)
@@ -222,7 +220,6 @@ void correrSimulador(const char *controlFile)
         }
     }
 
-    /* se chegou ao fim do ficheiro sem T, imprime estatísticas na mesma */
     printf("\n=== FIM DO FICHEIRO DE CONTROLO ===\n");
     reportFinal();
 

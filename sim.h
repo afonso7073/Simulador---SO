@@ -51,6 +51,17 @@ typedef struct {
 extern Fila prontos;
 extern Fila bloqueados;
 
+
+#define MAX_PENDENTES 50
+
+typedef struct {
+    char ficheiro[NOME_MAX];
+    int  chegada;
+    int  prioridade;
+} ProcessoPendente;
+
+extern ProcessoPendente pendentes[MAX_PENDENTES];
+extern int numPendentes;
 /* ─── PROTÓTIPOS ──────────────────────────────────────── */
 
 /* loader.c */
