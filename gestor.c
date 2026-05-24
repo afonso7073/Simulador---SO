@@ -1,6 +1,6 @@
 #include "sim.h"
 
-#define ALGORITMO 0
+#define ALGORITMO 0   /* 0=FCFS  1=Priority  2=SJFS  3=RM  4=EDF */
 #define QUANTUM   3
 
 static void inicializarTabela(void)
@@ -9,7 +9,7 @@ static void inicializarTabela(void)
         pcbTabela[i].estado = FREE;
 }
 
-static int criarProcesso(const char *ficheiro, int ppid, int prioridade)
+static int criarProcesso(const char *ficheiro, int ppid, int prioridade, int periodo)
 {
     int idx = -1;
     for (int i = 0; i < MAX_PROCS; i++)
@@ -46,13 +46,15 @@ static int criarProcesso(const char *ficheiro, int ppid, int prioridade)
     p->valor        = 0;
     p->tempo_inicio = tempo;
     p->tempo_cpu    = 0;
+    p->periodo      = periodo;
+    p->deadline     = (periodo > 0) ? tempo + periodo : 0;
     p->estado       = READY;
     strncpy(p->programa, ficheiro, NOME_MAX - 1);
 
     filaEnqueue(&prontos, idx);
 
-    printf("[t=%d] Processo %d criado ('%s', prioridade=%d)\n",
-           tempo, p->pid, ficheiro, prioridade);
+    printf("[t=%d] Processo %d criado ('%s', prioridade=%d, periodo=%d)\n",
+           tempo, p->pid, ficheiro, prioridade, periodo);
 
     return idx;
 }
@@ -63,6 +65,8 @@ static int escalonar(void)
     {
         case 1:  return escalonarPriority();
         case 2:  return escalonarSJFS();
+        case 3:  return escalonarRM();
+        case 4:  return escalonarEDF();
         default: return escalonarFCFS();
     }
 }
@@ -73,7 +77,9 @@ static void verificarChegadas(void)
     {
         if (pendentes[i].chegada <= tempo && pendentes[i].ficheiro[0] != '\0')
         {
-            criarProcesso(pendentes[i].ficheiro, 0, pendentes[i].prioridade);
+            criarProcesso(pendentes[i].ficheiro, 0,
+                          pendentes[i].prioridade,
+                          pendentes[i].periodo);
             pendentes[i].ficheiro[0] = '\0';
         }
     }
@@ -124,6 +130,7 @@ void iniciarSimulador(const char *planFile)
     char ficheiro[NOME_MAX];
     int  chegada    = 0;
     int  prioridade = 1;
+    int  periodo    = 0;
     char linha[64];
 
     while (fgets(linha, sizeof(linha), f))
@@ -132,19 +139,23 @@ void iniciarSimulador(const char *planFile)
             continue;
 
         prioridade = 1;
-        int lidos = sscanf(linha, "%14s %d %d", ficheiro, &chegada, &prioridade);
+        periodo    = 0;
+
+        int lidos = sscanf(linha, "%14s %d %d %d",
+                           ficheiro, &chegada, &prioridade, &periodo);
         if (lidos < 2)
             continue;
 
         if (chegada == 0)
         {
-            criarProcesso(ficheiro, 0, prioridade);
+            criarProcesso(ficheiro, 0, prioridade, periodo);
         }
         else
         {
             strncpy(pendentes[numPendentes].ficheiro, ficheiro, NOME_MAX - 1);
             pendentes[numPendentes].chegada    = chegada;
             pendentes[numPendentes].prioridade = prioridade;
+            pendentes[numPendentes].periodo    = periodo;
             numPendentes++;
         }
     }

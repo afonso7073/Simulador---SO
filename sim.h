@@ -5,42 +5,44 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* ─── MEMÓRIA ─────────────────────────────────────────── */
-#define MEM_SIZE   1000   /* total de slots de instrução   */
-#define MAX_PROCS   50    /* máximo de processos           */
-#define NOME_MAX    15    /* tamanho máximo do nome ficheiro*/
+/* ─── MEMÓRIA ─────────────────────────────────────────────── */
+#define MEM_SIZE   1000
+#define MAX_PROCS   50
+#define NOME_MAX    15
 
 typedef struct {
-    char ins;           /* tipo: M A S B T C L            */
-    int  n;             /* argumento numérico              */
-    char nome[NOME_MAX];/* usado só pela instrução L       */
+    char ins;
+    int  n;
+    char nome[NOME_MAX];
 } Instruction;
 
 extern Instruction memory[MEM_SIZE];
 
-/* ─── PCB ─────────────────────────────────────────────── */
+/* ─── PCB ─────────────────────────────────────────────────── */
 typedef enum { FREE, READY, RUNNING, BLOCKED, TERMINATED } Estado;
 
 typedef struct {
     int   pid;
     int   ppid;
     int   prioridade;
-    int   pc;           /* próxima instrução a executar    */
-    int   start;        /* índice no memory[] onde começa  */
-    int   size;         /* número de instruções            */
-    int   valor;        /* a única variável do processo    */
+    int   pc;
+    int   start;
+    int   size;
+    int   valor;
     int   tempo_inicio;
     int   tempo_cpu;
+    int   periodo;      /* 0 = não periódico */
+    int   deadline;     /* tempo_inicio + periodo */
     char  programa[NOME_MAX];
     Estado estado;
 } PCB;
 
 extern PCB    pcbTabela[MAX_PROCS];
-extern int    tempo;        /* relógio global da simulação */
-extern int    runningIdx;   /* índice em pcbTabela do processo a correr */
-extern int    nextPid;      /* próximo PID a atribuir      */
+extern int    tempo;
+extern int    runningIdx;
+extern int    nextPid;
 
-/* ─── FILAS ───────────────────────────────────────────── */
+/* ─── FILAS ───────────────────────────────────────────────── */
 #define FILA_MAX 50
 
 typedef struct {
@@ -51,22 +53,24 @@ typedef struct {
 extern Fila prontos;
 extern Fila bloqueados;
 
-
+/* ─── CHEGADA DINÂMICA ────────────────────────────────────── */
 #define MAX_PENDENTES 50
 
 typedef struct {
     char ficheiro[NOME_MAX];
     int  chegada;
     int  prioridade;
+    int  periodo;
 } ProcessoPendente;
 
 extern ProcessoPendente pendentes[MAX_PENDENTES];
 extern int numPendentes;
-/* ─── PROTÓTIPOS ──────────────────────────────────────── */
+
+/* ─── PROTÓTIPOS ──────────────────────────────────────────── */
 
 /* loader.c */
-int  carregarPrograma(const char *ficheiro);   /* devolve start em memory[], -1 se erro */
-int  programaEmMemoria(const char *ficheiro);  /* devolve start se já está, -1 se não   */
+int  carregarPrograma(const char *ficheiro);
+int  programaEmMemoria(const char *ficheiro);
 void libertarMemoria(int start, int size);
 
 /* filas.c */
@@ -82,10 +86,13 @@ void executar(int idx, int quantum);
 int  escalonarFCFS(void);
 int  escalonarPriority(void);
 int  escalonarSJFS(void);
+int  escalonarRM(void);
+int  escalonarEDF(void);
 
 /* gestor.c */
 void iniciarSimulador(const char *planFile);
 void correrSimulador(const char *controlFile);
+void escalonadorLongoPrazo(void);
 
 /* report.c */
 void report(void);

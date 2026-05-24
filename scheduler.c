@@ -90,4 +90,86 @@ int escalonarSJFS(void)
     }
 
     return escolhido;
+
+/* ─── RATE MONOTONIC ────────────────────────────────────────
+   Escolhe o processo com menor período (maior frequência).
+   Processos não periódicos (periodo=0) têm menor prioridade.
+   Devolve o índice do PCB escolhido, ou -1 se fila vazia.   */
+int escalonarRM(void)
+{
+    if (filaVazia(&prontos))
+        return -1;
+
+    int tmp[FILA_MAX];
+    int n = prontos.count;
+    for (int i = 0; i < n; i++)
+        tmp[i] = filaDequeue(&prontos);
+
+    int melhor = 0;
+    for (int i = 1; i < n; i++)
+    {
+        int periodoMelhor = pcbTabela[tmp[melhor]].periodo;
+        int periodoAtual  = pcbTabela[tmp[i]].periodo;
+
+        /* periodo 0 = não periódico = menor prioridade */
+        if (periodoMelhor == 0 && periodoAtual > 0)
+        {
+            melhor = i;
+        }
+        else if (periodoAtual > 0 && periodoAtual < periodoMelhor)
+        {
+            melhor = i;
+        }
+    }
+
+    int escolhido = tmp[melhor];
+    for (int i = 0; i < n; i++)
+    {
+        if (i != melhor)
+            filaEnqueue(&prontos, tmp[i]);
+    }
+
+    return escolhido;
+}
+
+/* ─── EDF — Earliest Deadline First ────────────────────────
+   Escolhe o processo com deadline mais próximo.
+   Processos não periódicos têm deadline = INT_MAX.
+   Devolve o índice do PCB escolhido, ou -1 se fila vazia.   */
+int escalonarEDF(void)
+{
+    if (filaVazia(&prontos))
+        return -1;
+
+    int tmp[FILA_MAX];
+    int n = prontos.count;
+    for (int i = 0; i < n; i++)
+        tmp[i] = filaDequeue(&prontos);
+
+    int melhor = 0;
+    int deadlineMelhor = pcbTabela[tmp[0]].deadline;
+    if (deadlineMelhor == 0)
+        deadlineMelhor = 2147483647; /* INT_MAX para não periódicos */
+
+    for (int i = 1; i < n; i++)
+    {
+        int dl = pcbTabela[tmp[i]].deadline;
+        if (dl == 0)
+            dl = 2147483647;
+        if (dl < deadlineMelhor)
+        {
+            deadlineMelhor = dl;
+            melhor = i;
+        }
+    }
+
+    int escolhido = tmp[melhor];
+    for (int i = 0; i < n; i++)
+    {
+        if (i != melhor)
+            filaEnqueue(&prontos, tmp[i]);
+    }
+
+    return escolhido;
+}
 }

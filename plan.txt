@@ -1,4 +1,4 @@
 progenitor.prg 0 3
 filho1.prg 0 2
-filho2.prg 5 1
-bloqueio.prg 10 2
+filho2.prg 0 1
+bloqueio.prg 0 2
